@@ -40,56 +40,68 @@ const userSchema = new mongoose.Schema({
   },
   
   phone: {
-    type: String,
-    required: [true, 'Mobile phone number is required'],
-    validate: {
-      validator: function(phone) {
-        const ethiopianPhoneRegex = /^(\+251|251|0)?(9[0-9])([0-9]{7})$/;
-        return ethiopianPhoneRegex.test(phone.replace(/\s+/g, ''));
-      },
-      message: 'Please use a valid Ethiopian mobile number (e.g., 0912345678, +251912345678, 251912345678)'
+  type: String,
+  required: [true, 'Mobile phone number is required'],
+  validate: {
+    validator: function(phone) {
+      if (!phone) return false;
+      const ethiopianPhoneRegex = /^(\+251|251|0)?(9[0-9])([0-9]{7})$/;
+      return ethiopianPhoneRegex.test(phone.replace(/\s+/g, ''));
     },
-    set: function(phone) {
-      const cleaned = phone.replace(/\s+/g, '').replace(/-/g, '');
-      
-      if (cleaned.startsWith('0')) {
-        return '+251' + cleaned.slice(1);
-      } else if (cleaned.startsWith('251')) {
-        return '+' + cleaned;
-      } else if (cleaned.startsWith('+251')) {
-        return cleaned;
-      } else {
-        return '+251' + cleaned;
-      }
-    }
+    message: 'Please use a valid Ethiopian mobile number (e.g., 0912345678, +251912345678, 251912345678)'
   },
+  set: function(phone) {
+    // ✅ ADD THIS NULL CHECK
+    if (!phone || typeof phone !== 'string') {
+      return phone;
+    }
+    
+    const cleaned = phone.replace(/\s+/g, '').replace(/-/g, '');
+    
+    if (cleaned.startsWith('0')) {
+      return '+251' + cleaned.slice(1);
+    } else if (cleaned.startsWith('251')) {
+      return '+' + cleaned;
+    } else if (cleaned.startsWith('+251')) {
+      return cleaned;
+    } else {
+      return '+251' + cleaned;
+    }
+  }
+},
   
   homeNumber: {
-    type: String,
-    required: function() {
-      return this.role === 'tutor';
-    },
-    validate: {
-      validator: function(homeNumber) {
-        const ethiopianLandlineRegex = /^(\+251|251|0)?([1-5][0-9])([0-9]{7})$/;
-        return ethiopianLandlineRegex.test(homeNumber.replace(/\s+/g, ''));
-      },
-      message: 'Please use a valid Ethiopian landline number (e.g., 0251112222, +251251112222)'
-    },
-    set: function(homeNumber) {
-      const cleaned = homeNumber.replace(/\s+/g, '').replace(/-/g, '');
-      
-      if (cleaned.startsWith('0')) {
-        return '+251' + cleaned.slice(1);
-      } else if (cleaned.startsWith('251')) {
-        return '+' + cleaned;
-      } else if (cleaned.startsWith('+251')) {
-        return cleaned;
-      } else {
-        return '+251' + cleaned;
-      }
-    }
+  type: String,
+  required: function() {
+    return this.role === 'tutor';
   },
+  validate: {
+    validator: function(homeNumber) {
+      if (!homeNumber) return false;
+      const ethiopianLandlineRegex = /^(\+251|251|0)?([1-5][0-9])([0-9]{7})$/;
+      return ethiopianLandlineRegex.test(homeNumber.replace(/\s+/g, ''));
+    },
+    message: 'Please use a valid Ethiopian landline number (e.g., 0251112222, +251251112222)'
+  },
+  set: function(homeNumber) {
+    // ✅ ADD THIS NULL CHECK
+    if (!homeNumber || typeof homeNumber !== 'string') {
+      return homeNumber;
+    }
+    
+    const cleaned = homeNumber.replace(/\s+/g, '').replace(/-/g, '');
+    
+    if (cleaned.startsWith('0')) {
+      return '+251' + cleaned.slice(1);
+    } else if (cleaned.startsWith('251')) {
+      return '+' + cleaned;
+    } else if (cleaned.startsWith('+251')) {
+      return cleaned;
+    } else {
+      return '+251' + cleaned;
+    }
+  }
+},
   
   fullName: {
     type: String,
