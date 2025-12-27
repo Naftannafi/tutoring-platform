@@ -10,7 +10,7 @@ import {
   resetPassword    
 } from '../controllers/authController.js';
 import User from '../models/User.js';
-
+import { protect } from '../middlewares/authMiddleware.js';
 const router = express.Router();
 
 // ======================
@@ -30,7 +30,7 @@ router.post('/login', login);
 // @desc    Get current user profile
 // @route   GET /api/auth/me
 // @access  Private
-router.get('/me', getMe);
+router.get('/me',protect, getMe);
 
 // @desc    Verify email with OTP
 // @route   POST /api/auth/verify-email
