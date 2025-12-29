@@ -357,7 +357,8 @@ userSchema.methods.toJSON = function() {
 };
 
 // Create indexes for better query performance
-userSchema.index({ email: 1 });
+// Email is already indexed via 'unique: true' on the field definition (line 15)
+// So we don't need to create a duplicate index for email
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isVerified: 1 });

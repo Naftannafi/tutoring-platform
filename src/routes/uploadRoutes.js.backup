@@ -38,6 +38,8 @@ router.post(
   upload.single('file'),
   async (req, res) => {
     try {
+      console.log('��� Simple upload received');
+      
       if (!req.file) {
         return res.status(400).json({
           success: false,
@@ -55,10 +57,12 @@ router.post(
           url: fileUrl,
           originalname: req.file.originalname,
           mimetype: req.file.mimetype,
-          size: req.file.size
+          size: req.file.size,
+          path: req.file.path
         }
       });
     } catch (error) {
+      console.error('Upload error:', error);
       res.status(500).json({
         success: false,
         message: 'Error uploading file',
@@ -84,7 +88,7 @@ router.post(
 router.post(
   '/tutor/certificates',
   protect,
-  upload.array('certificateFiles', 5),
+  upload.array('certificateFiles', 5), // Max 5 files
   uploadTutorCertificates
 );
 
@@ -94,7 +98,7 @@ router.post(
 router.post(
   '/tutor/documents',
   protect,
-  upload.array('documentFiles', 10),
+  upload.array('documentFiles', 10), // Max 10 files
   uploadTutorDocuments
 );
 

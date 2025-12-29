@@ -41,7 +41,7 @@ app.use('/api/upload', uploadRoutes);
 ========================= */
 app.get('/', (req, res) => {
   res.json({
-    message: 'Welcome to Tutoring Platform! 🎓',
+    message: 'Welcome to Tutoring Platform! ���',
     description: 'Connecting students and tutors',
     version: '1.0.0',
     endpoints: {
@@ -79,15 +79,17 @@ app.use('*', (req, res) => {
 });
 
 /* =========================
-   Global Error Handler
+   Global Error Handler - SHOW REAL ERRORS
 ========================= */
 app.use((error, req, res, next) => {
-  console.error('🚨 Server Error:', error);
+  console.error('��� REAL SERVER ERROR:', error);
+  console.error('��� Error Stack:', error.stack);
 
   res.status(500).json({
     success: false,
     error: 'Internal Server Error',
-    message: 'Something went wrong on our end'
+    message: error.message,  // Show actual error message
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
   });
 });
 

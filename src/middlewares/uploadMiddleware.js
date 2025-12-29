@@ -1,102 +1,113 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// Ensure upload directories exist
-const createUploadDirs = () => {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/* =========================
+   Ensure Upload Directories Exist
+========================= */
+const ensureUploadDirs = () => {
+  const baseDir = path.join(__dirname, '..'); // Go up to src
   const dirs = [
-    './uploads/profile',
-    './uploads/certificates', 
-    './uploads/documents',
-    './uploads/temp'
+    path.join(baseDir, 'uploads'),
+    path.join(baseDir, 'uploads/profile'),
+    path.join(baseDir, 'uploads/documents'),
+    path.join(baseDir, 'uploads/certificates'),
+    path.join(baseDir, 'uploads/verification')
   ];
   
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
+      console.log(`��� Created upload directory: ${dir}`);
     }
   });
 };
 
-createUploadDirs();
+ensureUploadDirs();
 
-// Configure storage
+/* =========================
+   Helper: Get File URL
+========================= */
+const getFileUrl = (file) => {
+  if (!file || !file.filename) return null;
+  
+  let folder = 'documents';
+  
+  if (file.fieldname === 'profileImage') {
+    folder = 'profile';
+  } else if (file.fieldname && file.fieldname.includes('certificate')) {
+    folder = 'certificates';
+  } else if (file.mimetype && file.mimetype.startsWith('image/')) {
+    folder = 'documents';
+  }
+  
+  return `/uploads/${folder}/${file.filename}`;
+};
+
+/* =========================
+   Storage Configuration
+========================= */
 const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    let uploadPath = './uploads/';
+  destination: (req, file, cb) => {
+    const baseDir = path.join(__dirname, '..'); // Go up to src
     
-    // Determine folder based on fieldname
+    let folder = 'documents';
+    
     if (file.fieldname === 'profileImage') {
-      uploadPath += 'profile/';
-    } else if (file.fieldname === 'certificates') {
-      uploadPath += 'certificates/';
-    } else if (file.fieldname === 'documents') {
-      uploadPath += 'documents/';
-    } else {
-      uploadPath += 'temp/';
+      folder = 'profile';
+    } else if (file.fieldname && file.fieldname.includes('certificate')) {
+      folder = 'certificates';
+    } else if (req.originalUrl && req.originalUrl.includes('verification')) {
+      folder = 'verification';
     }
     
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    
-    cb(null, uploadPath);
+    const destPath = path.join(baseDir, 'uploads', folder);
+    cb(null, destPath);
   },
-  filename: function(req, file, cb) {
-    // Create unique filename
+  
+  filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname).toLowerCase();
-    const originalName = path.basename(file.originalname, ext);
+    const ext = path.extname(file.originalname);
+    const baseName = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .toLowerCase()
+      .substring(0, 50);
     
-    // Safe filename (remove special characters)
-    const safeName = originalName.replace(/[^a-zA-Z0-9]/g, '-');
-    
-    cb(null, safeName + '-' + uniqueSuffix + ext);
+    cb(null, `${baseName}-${uniqueSuffix}${ext}`);
   }
 });
 
-// File filter for security
+/* =========================
+   File Filter
+========================= */
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = {
-    'profileImage': ['.jpg', '.jpeg', '.png', '.gif'],
-    'certificates': ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx'],
-    'documents': ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx']
-  };
-  
-  const allowedExtensions = allowedTypes[file.fieldname] || 
-                          ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx'];
-  
-  const ext = path.extname(file.originalname).toLowerCase();
-  
-  if (allowedExtensions.includes(ext)) {
-    cb(null, true);
+  const allowedTypes = /jpeg|jpg|png|pdf|doc|docx|txt/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
   } else {
-    cb(new Error(`Invalid file type for ${file.fieldname}. Allowed types: ${allowedExtensions.join(', ')}`), false);
+    cb(new Error('Only images (jpg, png) and documents (pdf, doc, docx) are allowed'));
   }
 };
 
-// Create multer instance
+/* =========================
+   Multer Configuration
+========================= */
 const upload = multer({
   storage: storage,
-  fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-    files: 10 // Max 10 files at once
-  }
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 10
+  },
+  fileFilter: fileFilter
 });
 
-// Helper function to get file URL
-const getFileUrl = (file) => {
-  if (!file) return null;
-  
-  // Remove './' from path for URL
-  let filePath = file.path.replace(/^\.\//, '');
-  
-  // Convert backslashes to forward slashes (for Windows)
-  filePath = filePath.replace(/\\/g, '/');
-  
-  return `/${filePath}`;
-};
-
-export { upload, getFileUrl };
+// Export the upload middleware as default and getFileUrl as named export
+export { getFileUrl };
+export default upload;
