@@ -9,6 +9,7 @@ import userRoutes from './routes/userRoutes.js';
 import tutorRoutes from './routes/tutorRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/tutors', tutorRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/session', sessionRoutes);
 
 /* =========================
    Root Route
