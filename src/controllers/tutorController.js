@@ -11,6 +11,10 @@ const sendResponse = (res, statusCode, success, message, data = null) => {
   });
 };
 
+// ======================
+// EXISTING FUNCTIONS
+// ======================
+
 // @desc    Register as a tutor
 // @route   POST /api/tutors/register
 // @access  Private (Must be logged in)
@@ -234,11 +238,146 @@ const getTutorById = async (req, res) => {
   }
 };
 
-// Export all functions
+// ======================
+// NEW AVAILABILITY FUNCTIONS (Day 13)
+// ======================
+
+// @desc    Block a specific date (make it unavailable)
+// @route   POST /api/tutors/availability/block
+// @access  Private (Tutor only)
+const blockDate = async (req, res) => {
+  try {
+    const { date, reason } = req.body;
+    if (!date) {
+      return sendResponse(res, 400, false, 'Date is required');
+    }
+
+    const tutor = await Tutor.findOne({ userId: req.user._id });
+    if (!tutor) {
+      return sendResponse(res, 404, false, 'Tutor profile not found');
+    }
+
+    // Check if date already blocked
+    const alreadyBlocked = (tutor.blockedDates || []).some(
+  b => new Date(b.date).toDateString() === new Date(date).toDateString()
+);
+   
+    if (alreadyBlocked) {
+      return sendResponse(res, 400, false, 'This date is already blocked');
+    }
+
+    tutor.blockedDates.push({ date, reason });
+    await tutor.save();
+
+    sendResponse(res, 200, true, 'Date blocked successfully', {
+      blockedDates: tutor.blockedDates
+    });
+  } catch (error) {
+    console.error('Block date error:', error);
+    sendResponse(res, 500, false, 'Server error');
+  }
+};
+
+// @desc    Unblock a previously blocked date
+// @route   DELETE /api/tutors/availability/block/:date
+// @access  Private (Tutor only)
+const unblockDate = async (req, res) => {
+  try {
+    const { date } = req.params;
+    if (!date) {
+      return sendResponse(res, 400, false, 'Date is required');
+    }
+
+    const tutor = await Tutor.findOne({ userId: req.user._id });
+    if (!tutor) {
+      return sendResponse(res, 404, false, 'Tutor profile not found');
+    }
+
+    // Remove the blocked date entry that matches the given date
+   tutor.blockedDates = (tutor.blockedDates || []).filter(
+  b => new Date(b.date).toDateString() !== new Date(date).toDateString()
+);
+    await tutor.save();
+
+    sendResponse(res, 200, true, 'Date unblocked successfully', {
+      blockedDates: tutor.blockedDates
+    });
+  } catch (error) {
+    console.error('Unblock date error:', error);
+    sendResponse(res, 500, false, 'Server error');
+  }
+};
+
+// @desc    Get tutor's schedule with available slots and blocked dates for a date range
+// @route   GET /api/tutors/availability/schedule (private - own schedule)
+// @route   GET /api/tutors/:tutorId/schedule (public)
+// @access  Private (Tutor) or Public (with tutorId)
+const getSchedule = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let tutor;
+
+    // If tutorId is provided in URL (public), use that, otherwise use logged-in user
+    if (req.params.tutorId) {
+      tutor = await Tutor.findById(req.params.tutorId);
+      if (!tutor) {
+        return sendResponse(res, 404, false, 'Tutor not found');
+      }
+    } else {
+      tutor = await Tutor.findOne({ userId: req.user._id });
+      if (!tutor) {
+        return sendResponse(res, 404, false, 'Tutor profile not found');
+      }
+    }
+
+    if (!startDate || !endDate) {
+      return sendResponse(res, 400, false, 'startDate and endDate are required (YYYY-MM-DD)');
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const schedule = [];
+
+    // Generate all dates in the range
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+      // Check if this date is blocked
+     const isBlocked = (tutor.blockedDates || []).some(
+  b => new Date(b.date).toDateString() === d.toDateString()
+);
+
+      // Find availability for this day of week
+      const dayAvailability = tutor.availability.find(a => a.day === dayOfWeek);
+
+      const daySchedule = {
+        date: dateStr,
+        day: dayOfWeek,
+        isBlocked,
+        slots: dayAvailability ? dayAvailability.slots.filter(slot => !slot.isBooked) : []
+      };
+
+      schedule.push(daySchedule);
+    }
+
+    sendResponse(res, 200, true, 'Schedule retrieved', { schedule });
+  } catch (error) {
+    console.error('Get schedule error:', error);
+    sendResponse(res, 500, false, 'Server error');
+  }
+};
+
+// ======================
+// EXPORT ALL FUNCTIONS
+// ======================
 export {
   registerTutor,
   getMyTutorProfile,
   updateTutorProfile,
   getAllTutors,
-  getTutorById
+  getTutorById,
+  blockDate,
+  unblockDate,
+  getSchedule
 };

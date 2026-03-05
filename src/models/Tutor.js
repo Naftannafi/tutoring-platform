@@ -249,6 +249,26 @@ const tutorSchema = new mongoose.Schema(
     ],
 
     /* ======================
+       BLOCKED DATES (NEW)
+    ====================== */
+    blockedDates: [
+      {
+        date: {
+          type: Date,
+          required: true
+        },
+        reason: {
+          type: String,
+          default: ''
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
+
+    /* ======================
        ADMIN APPROVAL
     ====================== */
     status: {
