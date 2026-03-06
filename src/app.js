@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+// TEMPORARY - for testing reminders
+import Session from './models/Session.js';
+import { sendSessionReminder } from './services/emailService.js';
 // Routes
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -10,6 +12,7 @@ import tutorRoutes from './routes/tutorRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
 
 const app = express();
 
@@ -39,6 +42,7 @@ app.use('/api/tutors', tutorRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/session', sessionRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 /* =========================
    Root Route
@@ -70,7 +74,64 @@ app.get('/health', (req, res) => {
     database: 'connected'
   });
 });
+// =========================
+// TEMPORARY TEST ROUTE - REMOVE AFTER TESTING
+// =========================
+app.get('/test-reminders', async (req, res) => {
+  try {
+    const now = new Date();
+    const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
+    // Find confirmed sessions starting in the next 24 hours that haven't had a reminder sent yet
+    const sessions = await Session.find({
+      status: 'confirmed',
+      date: { $gte: now, $lte: in24Hours },
+      reminderSent: { $ne: true }
+    })
+      .populate('studentId', 'email fullName')
+      .populate({
+        path: 'tutorId',
+        populate: { path: 'userId', select: 'email fullName' }
+      });
+
+    if (sessions.length === 0) {
+      return res.json({ message: 'No upcoming sessions needing reminders.' });
+    }
+
+    for (const session of sessions) {
+      const student = session.studentId;
+      const tutor = session.tutorId.userId;
+
+      const sessionData = {
+        _id: session._id,
+        subject: session.subject,
+        gradeLevel: session.gradeLevel,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        location: session.location,
+        notes: session.notes,
+        studentName: student.fullName,
+        tutorName: tutor.fullName,
+      };
+
+      // Send to student
+      await sendSessionReminder(student.email, student.fullName, sessionData, 'student');
+
+      // Send to tutor
+      await sendSessionReminder(tutor.email, tutor.fullName, sessionData, 'tutor');
+
+      // Mark reminder as sent
+      session.reminderSent = true;
+      await session.save();
+    }
+
+    res.json({ message: `Triggered reminders for ${sessions.length} sessions.` });
+  } catch (error) {
+    console.error('Manual reminder error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 /* =========================
    404 Handler
 ========================= */

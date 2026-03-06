@@ -22,38 +22,35 @@ import { protect, authorize } from '../middlewares/authMiddleware.js';
 const router = express.Router();
 
 // ======================
-// PUBLIC ROUTES
+// PUBLIC ROUTES (no authentication)
 // ======================
 router.get('/', getAllTutors);                     // GET /api/tutors
-router.get('/:id', getTutorById);                  // GET /api/tutors/:id
-// Public schedule for a specific tutor
-router.get('/:tutorId/schedule', getSchedule);     // GET /api/tutors/:tutorId/schedule
 
 // ======================
-// PRIVATE ROUTES (Require authentication)
+// PRIVATE ROUTES (require authentication)
+// Place these before public parameterized routes to avoid conflicts
 // ======================
-router.use(protect);
 
 // Tutor registration and profile management
-router.post('/register', registerTutor);            // POST /api/tutors/register
-router.get('/profile/me', getMyTutorProfile);       // GET /api/tutors/profile/me
-router.put('/profile/me', updateTutorProfile);      // PUT /api/tutors/profile/me
+router.post('/register', protect, registerTutor);          // POST /api/tutors/register
+router.get('/profile/me', protect, getMyTutorProfile);     // GET /api/tutors/profile/me
+router.put('/profile/me', protect, updateTutorProfile);    // PUT /api/tutors/profile/me
+
+// Availability management (tutor only)
+router.post('/availability/block', protect, authorize('tutor'), blockDate);       // POST /api/tutors/availability/block
+router.delete('/availability/block/:date', protect, authorize('tutor'), unblockDate); // DELETE /api/tutors/availability/block/:date
+router.get('/availability/schedule', protect, authorize('tutor'), getSchedule);   // GET /api/tutors/availability/schedule (private)
+
+// Admin routes (require admin role)
+router.get('/admin/pending', protect, authorize('admin'), getPendingTutors);     // GET /api/tutors/admin/pending
+router.get('/admin/all', protect, authorize('admin'), getAllTutorsAdmin);        // GET /api/tutors/admin/all
+router.put('/admin/:id/approve', protect, authorize('admin'), approveTutor);     // PUT /api/tutors/admin/:id/approve
+router.put('/admin/:id/reject', protect, authorize('admin'), rejectTutor);       // PUT /api/tutors/admin/:id/reject
 
 // ======================
-// TUTOR AVAILABILITY MANAGEMENT (Day 13)
+// PUBLIC PARAMETERIZED ROUTES (must come last, after all specific routes)
 // ======================
-router.post('/availability/block', authorize('tutor'), blockDate);       // POST /api/tutors/availability/block
-router.delete('/availability/block/:date', authorize('tutor'), unblockDate); // DELETE /api/tutors/availability/block/:date
-router.get('/availability/schedule', authorize('tutor'), getSchedule);   // GET /api/tutors/availability/schedule (private)
-
-// ======================
-// ADMIN ROUTES (Require admin role)
-// ======================
-router.use(authorize('admin'));
-
-router.get('/admin/pending', getPendingTutors);     // GET /api/tutors/admin/pending
-router.get('/admin/all', getAllTutorsAdmin);        // GET /api/tutors/admin/all
-router.put('/admin/:id/approve', approveTutor);     // PUT /api/tutors/admin/:id/approve
-router.put('/admin/:id/reject', rejectTutor);       // PUT /api/tutors/admin/:id/reject
+router.get('/:id', getTutorById);                  // GET /api/tutors/:id (public profile)
+router.get('/:tutorId/schedule', getSchedule);     // GET /api/tutors/:tutorId/schedule (public schedule)
 
 export default router;

@@ -83,6 +83,11 @@ const sessionSchema = new mongoose.Schema({
     },
     comment: String,
     submittedAt: Date
+  },
+  // ✅ Added for Day 14 automated reminders
+  reminderSent: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

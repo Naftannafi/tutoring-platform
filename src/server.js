@@ -1,6 +1,7 @@
 import app from './app.js';
 import config from './config/config.js';
 import database from './config/database.js';
+import './jobs/sessionReminder.js';   // <-- ADD THIS LINE
 
 const startServer = async () => {
   try {

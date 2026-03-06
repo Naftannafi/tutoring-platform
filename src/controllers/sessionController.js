@@ -70,12 +70,12 @@ export const bookSession = async (req, res) => {
       return sendResponse(res, 400, false, 'Time slot not available');
     }
 
-    // Check if slot is already booked (optional, if you track isBooked)
+    // Check if slot is already booked
     if (slot.isBooked) {
       return sendResponse(res, 400, false, 'This time slot is already booked');
     }
 
-    // Optionally, check for overlapping sessions with same tutor/student on same day/time
+    // Check for overlapping sessions
     const existingSession = await Session.findOne({
       tutorId,
       date: new Date(date),
@@ -102,11 +102,11 @@ export const bookSession = async (req, res) => {
       paymentMethod,
       location,
       notes,
-      status: 'pending', // initially pending, tutor must confirm
+      status: 'pending',
       paymentStatus: 'pending'
     });
 
-    // Mark slot as booked (if using isBooked)
+    // Mark slot as booked
     slot.isBooked = true;
     await tutor.save();
 
@@ -142,7 +142,6 @@ export const getMySessions = async (req, res) => {
     if (userRole === 'student') {
       filter.studentId = userId;
     } else if (userRole === 'tutor') {
-      // Find tutor document associated with this user
       const tutor = await Tutor.findOne({ userId });
       if (!tutor) {
         return sendResponse(res, 404, false, 'Tutor profile not found');
@@ -186,6 +185,44 @@ export const getMySessions = async (req, res) => {
   } catch (error) {
     console.error('Get my sessions error:', error);
     sendResponse(res, 500, false, 'Server error retrieving sessions');
+  }
+};
+
+// ======================
+// NEW: Get a single session by ID
+// ======================
+// @desc    Get a single session by ID
+// @route   GET /api/sessions/:id
+// @access  Private (student or tutor who owns the session)
+export const getSessionById = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id)
+      .populate('studentId', 'fullName email')
+      .populate({
+        path: 'tutorId',
+        populate: { path: 'userId', select: 'fullName email' }
+      });
+
+    if (!session) {
+      return sendResponse(res, 404, false, 'Session not found');
+    }
+
+    // Check if the logged-in user is either the student or the tutor
+    const userId = req.user._id.toString();
+    const isStudent = session.studentId._id.toString() === userId;
+    const isTutor = session.tutorId.userId._id.toString() === userId;
+
+    if (!isStudent && !isTutor && req.user.role !== 'admin') {
+      return sendResponse(res, 403, false, 'Not authorized to view this session');
+    }
+
+    sendResponse(res, 200, true, 'Session retrieved', { session });
+  } catch (error) {
+    console.error('Get session by ID error:', error);
+    if (error.name === 'CastError') {
+      return sendResponse(res, 400, false, 'Invalid session ID');
+    }
+    sendResponse(res, 500, false, 'Server error');
   }
 };
 
@@ -251,7 +288,7 @@ export const cancelSession = async (req, res) => {
     session.cancelledBy = req.user._id;
     await session.save();
 
-    // Free the slot (if using isBooked)
+    // Free the slot
     const tutorDoc = await Tutor.findById(session.tutorId);
     const dayOfWeek = new Date(session.date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const availability = tutorDoc.availability.find(a => a.day === dayOfWeek);

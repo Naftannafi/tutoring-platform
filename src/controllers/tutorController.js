@@ -257,11 +257,15 @@ const blockDate = async (req, res) => {
       return sendResponse(res, 404, false, 'Tutor profile not found');
     }
 
+    // ✅ Ensure blockedDates exists as an array
+    if (!tutor.blockedDates) {
+      tutor.blockedDates = [];
+    }
+
     // Check if date already blocked
-    const alreadyBlocked = (tutor.blockedDates || []).some(
-  b => new Date(b.date).toDateString() === new Date(date).toDateString()
-);
-   
+    const alreadyBlocked = tutor.blockedDates.some(
+      b => new Date(b.date).toDateString() === new Date(date).toDateString()
+    );
     if (alreadyBlocked) {
       return sendResponse(res, 400, false, 'This date is already blocked');
     }
@@ -294,9 +298,9 @@ const unblockDate = async (req, res) => {
     }
 
     // Remove the blocked date entry that matches the given date
-   tutor.blockedDates = (tutor.blockedDates || []).filter(
-  b => new Date(b.date).toDateString() !== new Date(date).toDateString()
-);
+    tutor.blockedDates = (tutor.blockedDates || []).filter(
+      b => new Date(b.date).toDateString() !== new Date(date).toDateString()
+    );
     await tutor.save();
 
     sendResponse(res, 200, true, 'Date unblocked successfully', {
@@ -344,9 +348,9 @@ const getSchedule = async (req, res) => {
       const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
       // Check if this date is blocked
-     const isBlocked = (tutor.blockedDates || []).some(
-  b => new Date(b.date).toDateString() === d.toDateString()
-);
+      const isBlocked = (tutor.blockedDates || []).some(
+        b => new Date(b.date).toDateString() === d.toDateString()
+      );
 
       // Find availability for this day of week
       const dayAvailability = tutor.availability.find(a => a.day === dayOfWeek);

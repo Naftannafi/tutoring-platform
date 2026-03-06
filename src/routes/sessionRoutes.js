@@ -4,6 +4,7 @@ import { authorize } from '../middlewares/authMiddleware.js';
 import {
   bookSession,
   getMySessions,
+  getSessionById,      
   confirmSession,
   cancelSession,
   completeSession
@@ -19,6 +20,9 @@ router.post('/book', authorize('student'), bookSession);
 
 // Get my sessions (works for both student and tutor)
 router.get('/my-sessions', getMySessions);
+
+// Get a single session by ID
+router.get('/:id', getSessionById);                
 
 // Tutor actions
 router.put('/:id/confirm', authorize('tutor'), confirmSession);
