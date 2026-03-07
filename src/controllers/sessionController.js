@@ -1,6 +1,7 @@
 import Session from '../models/Session.js';
 import Tutor from '../models/Tutor.js';
 import User from '../models/User.js';
+import { createNotification } from '../services/notificationService.js';   // <-- ADDED
 
 const sendResponse = (res, statusCode, success, message, data = null) => {
   res.status(statusCode).json({
@@ -116,6 +117,15 @@ export const bookSession = async (req, res) => {
       { path: 'studentId', select: 'fullName email' }
     ]);
 
+    // --- NOTIFICATION: Notify tutor about new booking ---
+    await createNotification(
+      tutor.userId._id,
+      'session_booked',
+      'New Session Request',
+      `Student ${req.user.fullName} booked a ${subject} session on ${new Date(date).toDateString()}.`,
+      { sessionId: session._id, studentId: req.user._id }
+    );
+
     sendResponse(res, 201, true, 'Session booked successfully. Awaiting tutor confirmation.', { session });
 
   } catch (error) {
@@ -188,9 +198,6 @@ export const getMySessions = async (req, res) => {
   }
 };
 
-// ======================
-// NEW: Get a single session by ID
-// ======================
 // @desc    Get a single session by ID
 // @route   GET /api/sessions/:id
 // @access  Private (student or tutor who owns the session)
@@ -238,7 +245,7 @@ export const confirmSession = async (req, res) => {
     }
 
     // Check if the logged-in user is the tutor for this session
-    const tutor = await Tutor.findOne({ userId: req.user._id });
+    const tutor = await Tutor.findOne({ userId: req.user._id }).populate('userId');
     if (!tutor || session.tutorId.toString() !== tutor._id.toString()) {
       return sendResponse(res, 403, false, 'Not authorized to confirm this session');
     }
@@ -249,6 +256,15 @@ export const confirmSession = async (req, res) => {
 
     session.status = 'confirmed';
     await session.save();
+
+    // --- NOTIFICATION: Notify student that session is confirmed ---
+    await createNotification(
+      session.studentId,
+      'session_confirmed',
+      'Session Confirmed',
+      `Your ${session.subject} session with ${tutor.userId.fullName} on ${new Date(session.date).toDateString()} has been confirmed.`,
+      { sessionId: session._id, tutorId: tutor._id }
+    );
 
     sendResponse(res, 200, true, 'Session confirmed', { session });
 
@@ -264,7 +280,10 @@ export const confirmSession = async (req, res) => {
 export const cancelSession = async (req, res) => {
   try {
     const { reason } = req.body;
-    const session = await Session.findById(req.params.id);
+    const session = await Session.findById(req.params.id).populate({
+      path: 'tutorId',
+      populate: { path: 'userId', select: 'fullName' }
+    });
 
     if (!session) {
       return sendResponse(res, 404, false, 'Session not found');
@@ -273,7 +292,7 @@ export const cancelSession = async (req, res) => {
     // Check if user is either the student or the tutor
     const tutor = await Tutor.findOne({ userId: req.user._id });
     const isStudent = session.studentId.toString() === req.user._id.toString();
-    const isTutor = tutor && session.tutorId.toString() === tutor._id.toString();
+    const isTutor = tutor && session.tutorId._id.toString() === tutor._id.toString();
 
     if (!isStudent && !isTutor) {
       return sendResponse(res, 403, false, 'Not authorized to cancel this session');
@@ -300,6 +319,17 @@ export const cancelSession = async (req, res) => {
       }
     }
 
+    // --- NOTIFICATION: Notify the other party about cancellation ---
+    const otherParty = isStudent ? session.tutorId.userId._id : session.studentId;
+    const otherPartyName = isStudent ? session.tutorId.userId.fullName : req.user.fullName;
+    await createNotification(
+      otherParty,
+      'session_cancelled',
+      'Session Cancelled',
+      `The ${session.subject} session scheduled for ${new Date(session.date).toDateString()} was cancelled. Reason: ${reason || 'Not specified'}`,
+      { sessionId: session._id, cancelledBy: req.user._id }
+    );
+
     sendResponse(res, 200, true, 'Session cancelled', { session });
 
   } catch (error) {
@@ -313,14 +343,17 @@ export const cancelSession = async (req, res) => {
 // @access  Private (Tutor only)
 export const completeSession = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
+    const session = await Session.findById(req.params.id).populate({
+      path: 'tutorId',
+      populate: { path: 'userId', select: 'fullName' }
+    });
 
     if (!session) {
       return sendResponse(res, 404, false, 'Session not found');
     }
 
     const tutor = await Tutor.findOne({ userId: req.user._id });
-    if (!tutor || session.tutorId.toString() !== tutor._id.toString()) {
+    if (!tutor || session.tutorId._id.toString() !== tutor._id.toString()) {
       return sendResponse(res, 403, false, 'Not authorized');
     }
 
@@ -336,6 +369,15 @@ export const completeSession = async (req, res) => {
     tutor.totalSessions += 1;
     tutor.totalHours += session.duration;
     await tutor.save();
+
+    // --- NOTIFICATION: Notify student that session is completed ---
+    await createNotification(
+      session.studentId,
+      'session_completed',
+      'Session Completed',
+      `Your ${session.subject} session with ${tutor.userId.fullName} on ${new Date(session.date).toDateString()} is completed. Please leave a review!`,
+      { sessionId: session._id, tutorId: tutor._id }
+    );
 
     sendResponse(res, 200, true, 'Session completed', { session });
 

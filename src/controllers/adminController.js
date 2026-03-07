@@ -1,5 +1,6 @@
 import Tutor from '../models/Tutor.js';
 import User from '../models/User.js';
+import { createNotification } from '../services/notificationService.js';   
 
 // @desc    Get all pending tutors
 // @route   GET /api/admin/tutors/pending
@@ -70,6 +71,15 @@ export const approveTutor = async (req, res) => {
 
     await tutor.save();
 
+    // --- NOTIFICATION: Notify tutor of approval ---
+    await createNotification(
+      tutor.userId,
+      'tutor_approved',
+      'Tutor Application Approved',
+      'Congratulations! Your tutor application has been approved. You can now receive session requests.',
+      { tutorId: tutor._id }
+    );
+
     res.status(200).json({
       success: true,
       message: 'Tutor approved successfully',
@@ -118,6 +128,15 @@ export const rejectTutor = async (req, res) => {
 
     // Revert user role to student
     await User.findByIdAndUpdate(tutor.userId, { role: 'student' });
+
+    // --- NOTIFICATION: Notify tutor of rejection ---
+    await createNotification(
+      tutor.userId,
+      'tutor_rejected',
+      'Tutor Application Rejected',
+      `Your tutor application was rejected. Reason: ${reason}`,
+      { tutorId: tutor._id }
+    );
 
     res.status(200).json({
       success: true,
