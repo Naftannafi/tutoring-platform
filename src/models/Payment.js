@@ -19,6 +19,18 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     default: 'ETB'
   },
+  commissionRate: {
+    type: Number,
+    default: 20
+  },
+  commissionAmount: {
+    type: Number,
+    default: 0
+  },
+  tutorEarnings: {
+    type: Number,
+    default: 0
+  },
   tx_ref: {
     type: String,
     required: true,
@@ -34,8 +46,12 @@ const paymentSchema = new mongoose.Schema({
     enum: ['card', 'telebirr', 'chapa'],
     default: 'chapa'
   },
+  // Encrypted Chapa response
   chapaResponse: {
-    type: mongoose.Schema.Types.Mixed
+    encrypted: { type: String, default: '' },
+    iv: { type: String, default: '' },
+    salt: { type: String, default: '' },
+    tag: { type: String, default: '' }
   },
   createdAt: {
     type: Date,

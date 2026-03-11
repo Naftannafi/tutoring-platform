@@ -15,6 +15,8 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import earningsRoutes from './routes/earningsRoutes.js';
+
 
 const app = express();
 
@@ -47,6 +49,7 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/earnings', earningsRoutes);
 
 /* =========================
    Root Route

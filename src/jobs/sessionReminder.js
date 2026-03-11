@@ -1,7 +1,6 @@
 import cron from 'node-cron';
 import Session from '../models/Session.js';
-import Tutor from '../models/Tutor.js';
-import { sendSessionReminder } from '../services/emailService.js';
+import { createNotification } from '../services/notificationService.js';
 
 // Run every hour at minute 0 (e.g., 1:00, 2:00, ...)
 cron.schedule('0 * * * *', async () => {
@@ -17,10 +16,10 @@ cron.schedule('0 * * * *', async () => {
       date: { $gte: now, $lte: in24Hours },
       reminderSent: { $ne: true }
     })
-      .populate('studentId', 'email fullName')
+      .populate('studentId', '_id fullName')
       .populate({
         path: 'tutorId',
-        populate: { path: 'userId', select: 'email fullName' }
+        populate: { path: 'userId', select: '_id fullName' }
       });
 
     if (sessions.length === 0) {
@@ -31,25 +30,28 @@ cron.schedule('0 * * * *', async () => {
     for (const session of sessions) {
       const student = session.studentId;
       const tutor = session.tutorId.userId;
+      const dateStr = new Date(session.date).toDateString();
 
-      const sessionData = {
-        _id: session._id,
-        subject: session.subject,
-        gradeLevel: session.gradeLevel,
-        date: session.date,
-        startTime: session.startTime,
-        endTime: session.endTime,
-        location: session.location,
-        notes: session.notes,
-        studentName: student.fullName,
-        tutorName: tutor.fullName,
-      };
+      // Prepare base notification data
+      const notificationData = { sessionId: session._id };
 
-      // Send to student
-      await sendSessionReminder(student.email, student.fullName, sessionData, 'student');
+      // Notify student
+      await createNotification(
+        student._id,
+        'reminder',
+        'Session Reminder',
+        `You have a ${session.subject} session with ${tutor.fullName} on ${dateStr} at ${session.startTime}.`,
+        notificationData
+      );
 
-      // Send to tutor
-      await sendSessionReminder(tutor.email, tutor.fullName, sessionData, 'tutor');
+      // Notify tutor
+      await createNotification(
+        tutor._id,
+        'reminder',
+        'Session Reminder',
+        `You have a ${session.subject} session with ${student.fullName} on ${dateStr} at ${session.startTime}.`,
+        notificationData
+      );
 
       // Mark reminder as sent
       session.reminderSent = true;

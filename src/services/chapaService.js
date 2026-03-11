@@ -1,62 +1,43 @@
-import axios from 'axios';
 import crypto from 'crypto';
-
-const CHAPA_SECRET_KEY = process.env.CHAPA_SECRET_KEY;
-const CHAPA_API_URL = 'https://api.chapa.co/v1';
 
 export const generateTxRef = () => {
   return 'tx-' + crypto.randomBytes(16).toString('hex');
 };
 
+// Mock initializePayment
 export const initializePayment = async ({ amount, currency, email, first_name, last_name, tx_ref, callback_url, return_url }) => {
-  try {
-    const response = await axios.post(
-      `${CHAPA_API_URL}/transaction/initialize`,
-      {
-        amount,
-        currency,
-        email,
-        first_name,
-        last_name,
-        tx_ref,
-        callback_url,
-        return_url,
-        customization: {
-          title: 'Tutoring Session Payment',
-          description: 'Payment for tutoring session'
-        }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${CHAPA_SECRET_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Chapa initialize error:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Payment initialization failed');
-  }
+  console.log('🔵 Mock Chapa: Payment initialized', { amount, currency, email, tx_ref });
+  return {
+    status: 'success',
+    message: 'Mock payment initialized',
+    data: {
+      checkout_url: `https://mock-chapa-checkout.com/${tx_ref}`,
+      tx_ref
+    }
+  };
 };
 
+// Mock verifyPayment
 export const verifyPayment = async (tx_ref) => {
-  try {
-    const response = await axios.get(
-      `${CHAPA_API_URL}/transaction/verify/${tx_ref}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${CHAPA_SECRET_KEY}`
-        }
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Chapa verify error:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Payment verification failed');
-  }
+  console.log('🔵 Mock Chapa: Verifying payment', { tx_ref });
+  return {
+    status: 'success',
+    data: {
+      status: 'success',
+      tx_ref,
+      amount: 100,
+      currency: 'ETB'
+    }
+  };
 };
 
+// Mock refundPayment (new)
+export const refundPayment = async (tx_ref, amount) => {
+  console.log(`🔵 Mock Chapa: Refund for ${tx_ref}, amount ${amount}`);
+  return { status: 'success', message: 'Refund initiated' };
+};
+
+// Webhook signature verification (optional)
 export const verifyWebhookSignature = (payload, signature, secret) => {
   const computedSignature = crypto
     .createHmac('sha256', secret)

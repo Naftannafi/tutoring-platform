@@ -1,5 +1,8 @@
 import Tutor from '../models/Tutor.js';
 import User from '../models/User.js';
+import Payment from '../models/Payment.js';
+import Earnings from '../models/Earnings.js';
+import Session from '../models/Session.js';
 import { createNotification } from '../services/notificationService.js';   
 
 // @desc    Get all pending tutors
@@ -209,6 +212,194 @@ export const getAllTutorsAdmin = async (req, res) => {
       success: false,
       message: 'Error fetching tutors',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Server error'
+    });
+  }
+};
+
+// ======================
+// NEW REVENUE REPORTING FUNCTIONS
+// ======================
+
+// @desc    Get platform revenue summary
+// @route   GET /api/admin/revenue/summary
+// @access  Private (Admin)
+export const getRevenueSummary = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const filter = {};
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    // Overall totals from completed payments
+    const totals = await Payment.aggregate([
+      { $match: { status: 'completed', ...filter } },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' },
+          totalCommission: { $sum: '$commissionAmount' },
+          totalTutorEarnings: { $sum: '$tutorEarnings' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Pending payouts (earnings with status pending)
+    const pendingPayouts = await Earnings.aggregate([
+      { $match: { status: 'pending', ...filter } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$netEarnings' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const summary = {
+      totalRevenue: totals[0]?.totalCommission || 0,
+      totalPaidToTutors: totals[0]?.totalTutorEarnings || 0,
+      totalTransactionAmount: totals[0]?.totalAmount || 0,
+      transactionCount: totals[0]?.count || 0,
+      pendingPayouts: pendingPayouts[0]?.total || 0,
+      pendingCount: pendingPayouts[0]?.count || 0,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Revenue summary retrieved',
+      data: summary,
+    });
+  } catch (error) {
+    console.error('Revenue summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching revenue summary',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Server error',
+    });
+  }
+};
+
+// @desc    Get detailed payment list for admin
+// @route   GET /api/admin/payments
+// @access  Private (Admin)
+export const getAllPaymentsAdmin = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      startDate,
+      endDate,
+      tutorId,
+      studentId,
+    } = req.query;
+
+    const filter = {};
+    if (status) filter.status = status;
+    if (studentId) filter.userId = studentId;
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+    // Note: tutorId filter would require joining with session, not implemented here for simplicity
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const payments = await Payment.find(filter)
+      .populate({
+        path: 'sessionId',
+        populate: [
+          { path: 'tutorId', populate: { path: 'userId', select: 'fullName email' } },
+          { path: 'studentId', select: 'fullName email' },
+        ],
+      })
+      .populate('userId', 'fullName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const total = await Payment.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      count: payments.length,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+      data: payments,
+    });
+  } catch (error) {
+    console.error('Get all payments admin error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching payments',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Server error',
+    });
+  }
+};
+
+// @desc    Get monthly revenue report (admin)
+// @route   GET /api/admin/revenue/monthly
+// @access  Private (Admin)
+export const getMonthlyRevenue = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const matchYear = year ? parseInt(year) : new Date().getFullYear();
+
+    const monthlyData = await Payment.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          createdAt: {
+            $gte: new Date(`${matchYear}-01-01`),
+            $lt: new Date(`${matchYear + 1}-01-01`),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: '$createdAt' },
+          totalAmount: { $sum: '$amount' },
+          totalCommission: { $sum: '$commissionAmount' },
+          totalTutorEarnings: { $sum: '$tutorEarnings' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    const result = monthlyData.map((item) => ({
+      month: months[item._id - 1],
+      monthNumber: item._id,
+      ...item,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Monthly revenue retrieved',
+      data: { year: matchYear, report: result },
+    });
+  } catch (error) {
+    console.error('Monthly revenue error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching monthly revenue',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Server error',
     });
   }
 };

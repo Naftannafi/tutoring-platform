@@ -1,6 +1,5 @@
 import nodemailer from 'nodemailer';
 
-// Create transporter – uses test account if no real credentials
 const createTransporter = async () => {
   if (process.env.NODE_ENV === 'development' && !process.env.EMAIL_USER) {
     const testAccount = await nodemailer.createTestAccount();
@@ -14,8 +13,6 @@ const createTransporter = async () => {
       },
     });
   }
-
-  // Real SMTP (Gmail, etc.)
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: process.env.EMAIL_PORT || 587,
@@ -27,40 +24,46 @@ const createTransporter = async () => {
   });
 };
 
-// ✅ Named export – make sure this line is exactly as below
-export const sendSessionReminder = async (to, name, session, role) => {
+/**
+ * Generic email sender
+ * @param {Object} options - { to, subject, html }
+ */
+export const sendEmail = async ({ to, subject, html }) => {
   try {
     const transporter = await createTransporter();
-
-    const subject = `⏰ Session Reminder: ${session.subject} with ${role === 'student' ? session.tutorName : session.studentName}`;
-    const dateStr = new Date(session.date).toDateString();
-    const timeStr = `${session.startTime} – ${session.endTime}`;
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px;">
-        <h2>Hello ${name},</h2>
-        <p>This is a reminder for your upcoming tutoring session:</p>
-        <ul>
-          <li><strong>Subject:</strong> ${session.subject}</li>
-          <li><strong>Grade Level:</strong> ${session.gradeLevel}</li>
-          <li><strong>Date:</strong> ${dateStr}</li>
-          <li><strong>Time:</strong> ${timeStr}</li>
-          <li><strong>Location:</strong> ${session.location.type === 'online' ? 'Online' : session.location.address || 'In-person'}</li>
-          ${session.notes ? `<li><strong>Notes:</strong> ${session.notes}</li>` : ''}
-        </ul>
-        <p>Please be on time and prepared. Thank you for using our platform!</p>
-      </div>
-    `;
-
     const info = await transporter.sendMail({
       from: `"Tutoring Platform" <${process.env.EMAIL_USER || 'no-reply@tutoring.com'}>`,
       to,
       subject,
       html,
     });
-
-    console.log(`✅ Reminder email sent to ${to} – Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+    console.log(`✅ Email sent to ${to} – Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+    return info;
   } catch (error) {
-    console.error('❌ Failed to send reminder email:', error);
+    console.error('❌ Failed to send email:', error);
+    throw error;
   }
+};
+
+// Keep original reminder function (can be removed later if not used elsewhere)
+export const sendSessionReminder = async (to, name, session, role) => {
+  const subject = `⏰ Session Reminder: ${session.subject} with ${role === 'student' ? session.tutorName : session.studentName}`;
+  const dateStr = new Date(session.date).toDateString();
+  const timeStr = `${session.startTime} – ${session.endTime}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+      <h2>Hello ${name},</h2>
+      <p>This is a reminder for your upcoming tutoring session:</p>
+      <ul>
+        <li><strong>Subject:</strong> ${session.subject}</li>
+        <li><strong>Grade Level:</strong> ${session.gradeLevel}</li>
+        <li><strong>Date:</strong> ${dateStr}</li>
+        <li><strong>Time:</strong> ${timeStr}</li>
+        <li><strong>Location:</strong> ${session.location.type === 'online' ? 'Online' : session.location.address || 'In-person'}</li>
+        ${session.notes ? `<li><strong>Notes:</strong> ${session.notes}</li>` : ''}
+      </ul>
+      <p>Please be on time and prepared. Thank you for using our platform!</p>
+    </div>
+  `;
+  return sendEmail({ to, subject, html });
 };
