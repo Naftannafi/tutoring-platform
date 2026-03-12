@@ -2,9 +2,16 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import xss from 'xss-clean';
+import hpp from 'hpp';
+import compression from 'compression'; // optional, improves performance
+
 // TEMPORARY - for testing reminders
 import Session from './models/Session.js';
 import { sendSessionReminder } from './services/emailService.js';
+
 // Routes
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -17,7 +24,6 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import earningsRoutes from './routes/earningsRoutes.js';
 
-
 const app = express();
 
 /* =========================
@@ -27,10 +33,44 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* =========================
-   Global Middleware
+   Security Middleware (must come before routes)
 ========================= */
-app.use(express.json());
-app.use(cors());
+// Disable fingerprinting
+app.disable('x-powered-by');
+
+// Set security HTTP headers
+app.use(helmet());
+
+// CORS configuration – adjust for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://your-frontend-domain.com', 'https://www.your-frontend-domain.com']
+    : '*',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Parse JSON body
+app.use(express.json({ limit: '10kb' })); // limit payload size
+
+// Data sanitization against NoSQL query injection
+app.use(mongoSanitize());
+
+// Data sanitization against XSS
+app.use(xss());
+
+// Prevent parameter pollution (allow safe duplicates)
+app.use(hpp({
+  whitelist: [
+    'page', 'limit', 'sortBy', 'sortOrder',
+    'subject', 'gradeLevel', 'minRate', 'maxRate',
+    'status', 'role', 'isVerified', 'isActive'
+  ]
+}));
+
+// Compression (optional)
+app.use(compression());
 
 /* =========================
    Static Files (Uploads)
@@ -56,7 +96,7 @@ app.use('/api/earnings', earningsRoutes);
 ========================= */
 app.get('/', (req, res) => {
   res.json({
-    message: 'Welcome to Tutoring Platform! ���',
+    message: 'Welcome to Tutoring Platform!',
     description: 'Connecting students and tutors',
     version: '1.0.0',
     endpoints: {
@@ -81,6 +121,7 @@ app.get('/health', (req, res) => {
     database: 'connected'
   });
 });
+
 // =========================
 // TEMPORARY TEST ROUTE - REMOVE AFTER TESTING
 // =========================
@@ -89,7 +130,6 @@ app.get('/test-reminders', async (req, res) => {
     const now = new Date();
     const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-    // Find confirmed sessions starting in the next 24 hours that haven't had a reminder sent yet
     const sessions = await Session.find({
       status: 'confirmed',
       date: { $gte: now, $lte: in24Hours },
@@ -122,13 +162,9 @@ app.get('/test-reminders', async (req, res) => {
         tutorName: tutor.fullName,
       };
 
-      // Send to student
       await sendSessionReminder(student.email, student.fullName, sessionData, 'student');
-
-      // Send to tutor
       await sendSessionReminder(tutor.email, tutor.fullName, sessionData, 'tutor');
 
-      // Mark reminder as sent
       session.reminderSent = true;
       await session.save();
     }
@@ -139,6 +175,7 @@ app.get('/test-reminders', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 /* =========================
    404 Handler
 ========================= */
@@ -154,13 +191,13 @@ app.use('*', (req, res) => {
    Global Error Handler - SHOW REAL ERRORS
 ========================= */
 app.use((error, req, res, next) => {
-  console.error('��� REAL SERVER ERROR:', error);
-  console.error('��� Error Stack:', error.stack);
+  console.error('❌ REAL SERVER ERROR:', error);
+  console.error('❌ Error Stack:', error.stack);
 
   res.status(500).json({
     success: false,
     error: 'Internal Server Error',
-    message: error.message,  // Show actual error message
+    message: error.message,
     stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
   });
 });
