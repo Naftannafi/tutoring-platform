@@ -160,46 +160,52 @@ export const rejectTutor = async (req, res) => {
 // @desc    Get all tutors with admin filters
 // @route   GET /api/admin/tutors
 // @access  Private (Admin only)
+
 export const getAllTutorsAdmin = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 20, 
-      status, 
-      subject, 
-      search 
-    } = req.query;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
 
     const filter = {};
-    
-    if (status) filter.status = status;
-    if (subject) filter['subjects.name'] = subject;
-    
-    if (search) {
+
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    if (req.query.subject) {
+      filter['subjects.name'] = req.query.subject;
+    }
+
+    if (req.query.search) {
       filter.$or = [
-        { bio: { $regex: search, $options: 'i' } },
-        { 'education.institution': { $regex: search, $options: 'i' } }
+        { bio: { $regex: req.query.search, $options: 'i' } },
+        {
+          'education.institution': {
+            $regex: req.query.search,
+            $options: 'i'
+          }
+        }
       ];
     }
 
-    const skip = (page - 1) * limit;
+    const [tutors, total] = await Promise.all([
+      Tutor.find(filter)
+        .populate('userId', 'fullName email phone')
+        .populate('approvedBy', 'fullName email')
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .lean(),
 
-    const tutors = await Tutor.find(filter)
-      .populate('userId', 'firstName lastName email')
-      .populate('approvedBy', 'firstName lastName')
-      .populate('rejectedBy', 'firstName lastName')
-      .skip(skip)
-      .limit(Number(limit))
-      .sort({ createdAt: -1 });
+      Tutor.countDocuments(filter)
+    ]);
 
-    const total = await Tutor.countDocuments(filter);
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: tutors.length,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit,
         total,
         pages: Math.ceil(total / limit)
       },
@@ -208,13 +214,15 @@ export const getAllTutorsAdmin = async (req, res) => {
 
   } catch (error) {
     console.error('Get all tutors admin error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Error fetching tutors',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Server error'
+      error: error.message
     });
   }
 };
+
 
 // ======================
 // NEW REVENUE REPORTING FUNCTIONS

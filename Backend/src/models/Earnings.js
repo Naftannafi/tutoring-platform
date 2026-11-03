@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const earningsSchema = new mongoose.Schema({
@@ -14,7 +15,8 @@ const earningsSchema = new mongoose.Schema({
   paymentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Payment',
-    required: true
+    required: true,
+    unique: true
   },
   amount: {
     type: Number,

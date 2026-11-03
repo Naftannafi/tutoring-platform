@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const reviewSchema = new mongoose.Schema({
@@ -5,7 +6,7 @@ const reviewSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Session',
     required: true,
-    unique: true // one review per session
+    unique: true
   },
   tutorId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -36,8 +37,5 @@ const reviewSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
-
-// Prevent multiple reviews for same session
-reviewSchema.index({ sessionId: 1 }, { unique: true });
 
 export default mongoose.model('Reviews', reviewSchema);

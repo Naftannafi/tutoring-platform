@@ -38,10 +38,29 @@ export const refundPayment = async (tx_ref, amount) => {
 };
 
 // Webhook signature verification (optional)
+
 export const verifyWebhookSignature = (payload, signature, secret) => {
-  const computedSignature = crypto
-    .createHmac('sha256', secret)
-    .update(JSON.stringify(payload))
-    .digest('hex');
-  return computedSignature === signature;
+  try {
+    if (
+      !secret ||
+      typeof signature !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(signature)
+    ) {
+      return false;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(payload))
+      .digest();
+
+    const receivedSignature = Buffer.from(signature, 'hex');
+
+    return (
+      receivedSignature.length === expectedSignature.length &&
+      crypto.timingSafeEqual(receivedSignature, expectedSignature)
+    );
+  } catch (error) {
+    return false;
+  }
 };

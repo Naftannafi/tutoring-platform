@@ -25,8 +25,13 @@ export const createReview = async (req, res) => {
 
     // Find the session
     const session = await Session.findById(sessionId)
-      .populate('tutorId')
-      .populate('studentId');
+  .populate({
+    path: 'tutorId',
+    populate: {
+      path: 'userId',
+      select: '_id'
+    }
+  });
 
     if (!session) {
       return sendResponse(res, 404, false, 'Session not found');
@@ -123,32 +128,57 @@ export const getTutorReviews = async (req, res) => {
 // @desc    Get a review by session ID (for checking if already reviewed)
 // @route   GET /api/reviews/session/:sessionId
 // @access  Private (student or tutor)
+
 export const getReviewBySession = async (req, res) => {
   try {
     const { sessionId } = req.params;
+
     const review = await Review.findOne({ sessionId })
       .populate('studentId', 'fullName')
-      .populate('tutorId', 'userId');
+      .populate({
+        path: 'tutorId',
+        populate: {
+          path: 'userId',
+          select: 'fullName'
+        }
+      });
 
     if (!review) {
-      return sendResponse(res, 404, false, 'No review found for this session');
+      return sendResponse(
+        res, 404, false, 'No review found for this session'
+      );
     }
 
-    // Check authorization: only student, tutor, or admin can view
-    const session = await Session.findById(sessionId);
+    const session = await Session.findById(sessionId)
+      .populate({
+        path: 'tutorId',
+        populate: {
+          path: 'userId',
+          select: '_id'
+        }
+      });
+
     if (!session) {
       return sendResponse(res, 404, false, 'Session not found');
     }
 
-    const isStudent = session.studentId.toString() === req.user._id.toString();
-    const isTutor = session.tutorId.userId._id.toString() === req.user._id.toString();
+    const isStudent =
+      session.studentId.toString() === req.user._id.toString();
+
+    const isTutor =
+      session.tutorId?.userId?._id?.toString() ===
+      req.user._id.toString();
+
     if (!isStudent && !isTutor && req.user.role !== 'admin') {
       return sendResponse(res, 403, false, 'Not authorized');
     }
 
-    sendResponse(res, 200, true, 'Review retrieved', { review });
+    return sendResponse(
+      res, 200, true, 'Review retrieved', { review }
+    );
+
   } catch (error) {
     console.error('Get review by session error:', error);
-    sendResponse(res, 500, false, 'Server error');
+    return sendResponse(res, 500, false, 'Server error');
   }
 };
